@@ -1,0 +1,181 @@
+# YUVA Intern - Week 3
+# Sentiment Analysis and Named Entity Recognition (NER)
+
+import re
+import pandas as pd
+import spacy
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score, classification_report
+
+
+# =========================================================
+# 1. SENTIMENT ANALYSIS
+# =========================================================
+
+# Sample dataset
+data = {
+    "text": [
+        "I love this product, it is excellent.",
+        "The movie was amazing and enjoyable.",
+        "This is a fantastic experience.",
+        "I am very happy with the service.",
+        "The product works perfectly.",
+        "I hate this product, it is terrible.",
+        "The movie was boring and disappointing.",
+        "This is a horrible experience.",
+        "I am very unhappy with the service.",
+        "The product stopped working and is useless."
+    ],
+
+    "sentiment": [
+        "positive",
+        "positive",
+        "positive",
+        "positive",
+        "positive",
+        "negative",
+        "negative",
+        "negative",
+        "negative",
+        "negative"
+    ]
+}
+
+df = pd.DataFrame(data)
+
+
+# Text preprocessing
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"http\S+|www\S+", "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+df["clean_text"] = df["text"].apply(clean_text)
+
+
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(
+    df["clean_text"],
+    df["sentiment"],
+    test_size=0.3,
+    random_state=42,
+    stratify=df["sentiment"]
+)
+
+
+# TF-IDF + Logistic Regression
+sentiment_model = Pipeline([
+    (
+        "tfidf",
+        TfidfVectorizer(stop_words="english")
+    ),
+
+    (
+        "classifier",
+        LogisticRegression(max_iter=1000)
+    )
+])
+
+
+# Train model
+sentiment_model.fit(X_train, y_train)
+
+
+# Prediction
+predictions = sentiment_model.predict(X_test)
+
+
+# Evaluation
+print("=" * 60)
+print("SENTIMENT ANALYSIS")
+print("=" * 60)
+
+accuracy = accuracy_score(y_test, predictions)
+
+print("Accuracy:", round(accuracy, 2))
+
+print("\nClassification Report:")
+print(
+    classification_report(
+        y_test,
+        predictions,
+        zero_division=0
+    )
+)
+
+
+# =========================================================
+# 2. NAMED ENTITY RECOGNITION (NER)
+# =========================================================
+
+# Install model before running:
+# python -m spacy download en_core_web_sm
+
+nlp = spacy.load("en_core_web_sm")
+
+
+sample_text = (
+    "Satya Nadella is the CEO of Microsoft. "
+    "Microsoft is headquartered in Redmond, Washington. "
+    "He visited India in January 2026."
+)
+
+
+doc = nlp(sample_text)
+
+
+print("\n" + "=" * 60)
+print("NAMED ENTITY RECOGNITION")
+print("=" * 60)
+
+
+for entity in doc.ents:
+    print(
+        f"Entity: {entity.text:25} "
+        f"Type: {entity.label_}"
+    )
+
+
+# =========================================================
+# 3. USER INPUT
+# =========================================================
+
+print("\n" + "=" * 60)
+print("CUSTOM TEXT ANALYSIS")
+print("=" * 60)
+
+user_text = input("Enter a sentence: ")
+
+
+# Sentiment prediction
+cleaned_text = clean_text(user_text)
+
+sentiment = sentiment_model.predict(
+    [cleaned_text]
+)[0]
+
+print("\nPredicted Sentiment:", sentiment)
+
+
+# NER prediction
+user_doc = nlp(user_text)
+
+print("\nDetected Named Entities:")
+
+if user_doc.ents:
+
+    for entity in user_doc.ents:
+        print(
+            f"{entity.text} -> {entity.label_}"
+        )
+
+else:
+    print("No named entities found.")
