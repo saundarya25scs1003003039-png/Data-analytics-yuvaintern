@@ -1,0 +1,268 @@
+# Week 1 Project
+# Exploratory Data Analysis & Preprocessing in NLP
+# Dataset: IMDb Movie Reviews
+
+import re
+from collections import Counter
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.feature_extraction.text import CountVectorizer
+import nltk
+
+# Download NLTK resources
+nltk.download("punkt")
+nltk.download("punkt_tab")
+nltk.download("stopwords")
+
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+
+# --------------------------------------------------
+# 1. Load Dataset
+# --------------------------------------------------
+
+FILE_NAME = "IMDB Dataset.csv"
+
+df = pd.read_csv(FILE_NAME)
+
+print("\n===== DATASET INFORMATION =====")
+print("Shape:", df.shape)
+print("\nFirst 5 rows:")
+print(df.head())
+
+print("\nColumns:")
+print(df.columns)
+
+
+# --------------------------------------------------
+# 2. Missing Values
+# --------------------------------------------------
+
+print("\n===== MISSING VALUES =====")
+print(df.isnull().sum())
+
+
+# --------------------------------------------------
+# 3. Duplicate Values
+# --------------------------------------------------
+
+duplicates = df["review"].duplicated().sum()
+
+print("\n===== DUPLICATES =====")
+print("Duplicate reviews:", duplicates)
+
+
+# Remove duplicates
+df = df.drop_duplicates(subset="review").reset_index(drop=True)
+
+print("Dataset after removing duplicates:", df.shape)
+
+
+# --------------------------------------------------
+# 4. Sentiment Distribution
+# --------------------------------------------------
+
+print("\n===== SENTIMENT DISTRIBUTION =====")
+print(df["sentiment"].value_counts())
+
+plt.figure(figsize=(7, 5))
+df["sentiment"].value_counts().plot(kind="bar")
+plt.title("Sentiment Distribution")
+plt.xlabel("Sentiment")
+plt.ylabel("Number of Reviews")
+plt.tight_layout()
+plt.savefig("sentiment_distribution.png")
+plt.show()
+
+
+# --------------------------------------------------
+# 5. Text Cleaning
+# --------------------------------------------------
+
+def clean_text(text):
+
+    # Remove HTML tags
+    text = re.sub(r"<[^>]+>", " ", str(text))
+
+    # Remove URLs
+    text = re.sub(r"https?://\S+|www\.\S+", " ", text)
+
+    # Convert to lowercase
+    text = text.lower()
+
+    # Keep alphabets and apostrophes
+    text = re.sub(r"[^a-z\s']", " ", text)
+
+    # Remove extra spaces
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+df["clean_review"] = df["review"].apply(clean_text)
+
+
+# --------------------------------------------------
+# 6. Review Length Analysis
+# --------------------------------------------------
+
+df["word_count"] = df["clean_review"].str.split().str.len()
+df["char_count"] = df["clean_review"].str.len()
+
+print("\n===== REVIEW LENGTH STATISTICS =====")
+
+print("\nWord Count:")
+print(df["word_count"].describe())
+
+print("\nCharacter Count:")
+print(df["char_count"].describe())
+
+
+# Review length histogram
+plt.figure(figsize=(8, 5))
+df["word_count"].plot(kind="hist", bins=50)
+plt.title("Distribution of Review Lengths")
+plt.xlabel("Number of Words")
+plt.ylabel("Frequency")
+plt.tight_layout()
+plt.savefig("review_length_distribution.png")
+plt.show()
+
+
+# --------------------------------------------------
+# 7. Tokenization
+# --------------------------------------------------
+
+stop_words = set(stopwords.words("english"))
+
+# Preserve important negation words
+stop_words = stop_words - {"no", "not", "nor", "never"}
+
+
+def tokenize(text):
+
+    tokens = word_tokenize(text)
+
+    # Remove stopwords and non-alphabetic tokens
+    tokens = [
+        word for word in tokens
+        if word.isalpha() and word not in stop_words
+    ]
+
+    return tokens
+
+
+df["tokens"] = df["clean_review"].apply(tokenize)
+
+
+# --------------------------------------------------
+# 8. Most Frequent Words
+# --------------------------------------------------
+
+all_words = []
+
+for tokens in df["tokens"]:
+    all_words.extend(tokens)
+
+word_frequency = Counter(all_words)
+
+top_words = word_frequency.most_common(20)
+
+print("\n===== TOP 20 MOST FREQUENT WORDS =====")
+
+for word, count in top_words:
+    print(word, ":", count)
+
+
+# --------------------------------------------------
+# 9. Top Words Visualization
+# --------------------------------------------------
+
+words = [item[0] for item in top_words]
+counts = [item[1] for item in top_words]
+
+plt.figure(figsize=(10, 6))
+plt.barh(words[::-1], counts[::-1])
+plt.title("Top 20 Most Frequent Words")
+plt.xlabel("Frequency")
+plt.tight_layout()
+plt.savefig("top_words.png")
+plt.show()
+
+
+# --------------------------------------------------
+# 10. N-Gram Analysis
+# --------------------------------------------------
+
+def get_ngrams(texts, n=2, top_k=20):
+
+    vectorizer = CountVectorizer(
+        ngram_range=(n, n),
+        min_df=2
+    )
+
+    matrix = vectorizer.fit_transform(texts)
+
+    counts = matrix.sum(axis=0).A1
+
+    terms = vectorizer.get_feature_names_out()
+
+    data = list(zip(terms, counts))
+
+    data.sort(key=lambda x: x[1], reverse=True)
+
+    return data[:top_k]
+
+
+# Bigrams
+bigrams = get_ngrams(df["clean_review"], n=2)
+
+print("\n===== TOP 20 BIGRAMS =====")
+
+for phrase, count in bigrams:
+    print(phrase, ":", count)
+
+
+# Trigrams
+trigrams = get_ngrams(df["clean_review"], n=3)
+
+print("\n===== TOP 20 TRIGRAMS =====")
+
+for phrase, count in trigrams:
+    print(phrase, ":", count)
+
+
+# --------------------------------------------------
+# 11. Save Processed Dataset
+# --------------------------------------------------
+
+output_columns = [
+    "review",
+    "sentiment",
+    "clean_review",
+    "word_count",
+    "char_count"
+]
+
+df[output_columns].to_csv(
+    "processed_imdb_reviews.csv",
+    index=False
+)
+
+
+# --------------------------------------------------
+# 12. Final Summary
+# --------------------------------------------------
+
+print("\n====================================")
+print("NLP EDA AND PREPROCESSING COMPLETED")
+print("====================================")
+
+print("Final dataset size:", df.shape)
+print("Processed dataset saved as: processed_imdb_reviews.csv")
+print("Charts saved:")
+print("- sentiment_distribution.png")
+print("- review_length_distribution.png")
+print("- top_words.png")
